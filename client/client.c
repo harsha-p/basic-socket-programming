@@ -5,6 +5,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 #define PORT 8080
 
 int main(int argc, char const *argv[])
@@ -15,6 +19,7 @@ int main(int argc, char const *argv[])
     char filename[1024] = {0};
     int filesize = 0;
     char buffer[1024] = {0};
+    char numfiles[1024] = {0};
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         printf("\n[-]Socket \n");
@@ -27,50 +32,61 @@ int main(int argc, char const *argv[])
     if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0)
     {
         printf("\n[-]Invalid address/ Address not supported \n");
-        return -1;
+        exit(EXIT_FAILURE);
     }
-    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) // connect to the server address
     {
         printf("\n[-]Connection Failed \n");
-        return -1;
+        exit(EXIT_FAILURE);
     }
     printf("\n[+]Connection established \n");
-    // get file name
-    printf("Enter filename: ");
-    scanf("%s", filename);
-    send(sock, filename, strlen(filename), 0);
-    if (read(sock, buffer, 1024) < 0)
+
+    // sprintf(numfiles, "%d", argc - 1);                 // number of files requested
+    // if (send(sock, numfiles, strlen(numfiles), 0) < 0) // send files count
+    // {
+    //     perror("send");
+    //     exit(EXIT_FAILURE);
+    // }
+    for (int i = 1; i < argc; i++)
     {
-        printf("\n[-]Cannot read file size \n");
-        return -1;
-    }
-    filesize = atoi(buffer);
-    if (filesize == -1)
-    {
-        printf("\n[-]No such file \n");
-        return -1;
-    }
-    FILE *rec;
-    rec = fopen(filename, "w");
-    if (rec == NULL)
-    {
-        printf("\n[-]Failed to open file %s \n", filename);
-        return -1;
-    }
-    printf("\n[+]Opened file %s successfully \n", filename);
-    int rem, ret;
-    rem = filesize;
-    bzero(buffer, 1024);
-    while ((rem > 0) && ((ret = read(sock, buffer, 1024)) > 0))
-    {
-        fwrite(buffer, sizeof(char), ret, rec);
-        rem -= ret;
-        // printf("\n[+]received %d bytes \n", ret);
-        fprintf(stdout, "Progress: %.2f\r", 100 * ((double)rem / filesize));
+        if (send(sock, argv[i], strlen(argv[i]), 0) < 0) // send file name
+        {
+            perror("send");
+            exit(EXIT_FAILURE);
+        }
+        printf("\n[+]Requested file %s \n", argv[i]);
+        if (read(sock, buffer, 1024) < 0) // read file size
+        {
+            printf("\n[-]Cannot read file size \n");
+            exit(EXIT_FAILURE);
+        }
+        filesize = atoi(buffer);
+        if (filesize == -1)
+        {
+            printf("\n[-]File %s not found \n", argv[i]);
+            exit(EXIT_FAILURE);
+        }
+        int fd;
+        if ((fd = open(argv[i], O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
+        {
+            perror(argv[i]);
+            exit(EXIT_FAILURE);
+        }
+        printf("\n[+]Downloading file %s \n", argv[i]);
+        int rem, ret;
+        rem = filesize;
         bzero(buffer, 1024);
+        while ((rem > 0) && ((ret = read(sock, buffer, 1024)) > 0)) // copy file
+        {
+            write(fd, buffer, ret);
+            rem -= ret;
+            // printf("\n[+]received %d bytes \n", ret);
+            printf("Progress: %.2f\r", 100 * (((double)(filesize - rem)) / filesize));
+            bzero(buffer, 1024);
+        }
+        close(fd);
+        printf("\n[+]Received file %s successfully \n", filename);
     }
-    fclose(rec);
-    printf("\n[+]Received file %s successfully \n", filename);
-    // close(socket);
+    close(sock);
     return 0;
 }

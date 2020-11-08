@@ -19,6 +19,7 @@ int main(int argc, char const *argv[])
     char buffer[1024] = {0};
     char filename[1024] = {0};
     char filesize[1024] = {0};
+    int numfile = 0;
     // Creating socket file descriptor
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
     {
@@ -33,71 +34,74 @@ int main(int argc, char const *argv[])
     }
     printf("\n[+]Socket created successfully\n");
 
-    address.sin_family = AF_INET;         // Address family. For IPv6, it's AF_INET6. 29 others exist like AF_UNIX etc.
-    address.sin_addr.s_addr = INADDR_ANY; // Accept connections from any IP address - listens from all interfaces.
-    address.sin_port = htons(PORT);       // Server port to open. Htons converts to Big Endian - Left to Right. RTL is Little Endian
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_port = htons(PORT);
 
-    // Forcefully attaching socket to the port 8080
     if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
     {
         perror("\n[-]Bind failed");
         exit(EXIT_FAILURE);
     }
 
-    // Port bind is done. You want to wait for incoming connections and handle them in some way.
-    // The process is two step: first you listen(), then you accept()
-    if (listen(server_fd, 3) < 0) // 3 is the maximum size of queue - connections you haven't accepted
+    if (listen(server_fd, 3) < 0)
     {
         perror("\n[-]listen");
         exit(EXIT_FAILURE);
     }
-    printf("\n[+]Server listening.Waiting for clients\n");
-    // returns a brand new socket file descriptor to use for this single accepted connection. Once done, use send and recv
+    printf("\n[+]Waiting for client\n");
+    addrlen = sizeof(address);
+    if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0)
+    {
+        perror("\n[-]Accept client \n");
+        exit(EXIT_FAILURE);
+    }
+    printf("\n[+]Accepted client\n");
+    // read(new_socket, buffer, 1024);
+    // numfile = atoi(buffer);
+    // printf("%d numfile\n", numfile);
+    // for (int i = 0; i < numfile; i++)
     for (;;)
     {
-        addrlen = sizeof(address);
-        if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0)
+        if (read(new_socket, filename, 1024) <= 0)
         {
-            perror("\n[-]Accept client \n");
-            exit(EXIT_FAILURE);
+            exit(EXIT_SUCCESS);
         }
-        read(new_socket, filename, 1024);
         struct stat filestat;
-        printf("\n[+]Requested file %s\n", filename);
+        printf("\n[+]Client requested file %s\n", filename);
         int file = open(filename, O_RDONLY);
         if (file < 0)
         {
             printf("\n[-]No such file \n");
             sprintf(filesize, "%d", -1);
             valread = send(new_socket, filesize, sizeof(filesize), 0);
-            continue;
+            exit(EXIT_FAILURE);
+            // continue;
         }
         if (fstat(file, &filestat) < 0)
         {
             perror("\n[-]Error getting file stat \n");
-            // exit(EXIT_FAILURE);
-            continue;
+            exit(EXIT_FAILURE);
         }
         sprintf(filesize, "%ld", filestat.st_size);
-        printf("\n[+]%s file size %ld \n", filename, filestat.st_size);
+        printf("\n[+]File %s found of size %ld \n", filename, filestat.st_size);
         valread = send(new_socket, filesize, sizeof(filesize), 0);
         if (valread < 0)
         {
-            perror("\n[-]Sending file size \n");
+            perror("\n[-]Sendfile size \n");
             exit(EXIT_FAILURE);
         }
         off_t offset = 0;
         int rem = filestat.st_size;
         int ret;
-        // send file
         while (((ret = sendfile(new_socket, file, &offset, 1024)) > 0 && (rem > 0)))
         {
             rem -= ret;
-            // fprintf(stdout, "2. Server sent %d bytes from file's data, offset is now : %ld and remaining data = %d\n", ret, offset, rem);
-            // fprintf(stdout, "Progress: %.2f\r", 100 * ((double)rem / filestat.st_size));
+            // printf("Progress: %.2f\r", 100 * (((double)(filestat.st_size - rem)) / filestat.st_size));
         }
-        close(new_socket);
+        bzero(filename, 1024);
     }
+    close(new_socket);
     close(server_fd);
     return 0;
 }
