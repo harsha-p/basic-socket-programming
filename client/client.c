@@ -45,7 +45,6 @@ int main(int argc, char const *argv[])
         return -1;
     }
     filesize = atoi(buffer);
-    printf("%d filesize\n", filesize);
     if (filesize == -1)
     {
         printf("\n[-]No such file \n");

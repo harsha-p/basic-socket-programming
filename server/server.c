@@ -94,7 +94,7 @@ int main(int argc, char const *argv[])
         {
             rem -= ret;
             // fprintf(stdout, "2. Server sent %d bytes from file's data, offset is now : %ld and remaining data = %d\n", ret, offset, rem);
-            fprintf(stdout, "Progress: %.2f\r", 100 * ((double)rem / filestat.st_size));
+            // fprintf(stdout, "Progress: %.2f\r", 100 * ((double)rem / filestat.st_size));
         }
         close(new_socket);
     }
