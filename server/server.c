@@ -1,13 +1,13 @@
-#include <stdio.h>
-#include <sys/socket.h>
-#include <stdlib.h>
-#include <netinet/in.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/sendfile.h>
-#include <fcntl.h>
+#include "stdio.h"
+#include "sys/socket.h"
+#include "stdlib.h"
+#include "netinet/in.h"
+#include "string.h"
+#include "unistd.h"
+#include "sys/stat.h"
+#include "sys/types.h"
+// #include "sys/sendfile.h"
+#include "fcntl.h"
 #define PORT 8080
 
 int main(int argc, char const *argv[])
@@ -23,16 +23,16 @@ int main(int argc, char const *argv[])
     // Creating socket file descriptor
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
     {
-        perror("\n[-]Socket failed");
+        perror("\n[-]Socket failed\n");
         exit(EXIT_FAILURE);
     }
     // This is to lose the pesky "Address already in use" error message
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) // SOL_SOCKET is the socket layer itself
     {
-        perror("\n[-]Setsockopt");
+        perror("[-]Setsockopt\n");
         exit(EXIT_FAILURE);
     }
-    printf("\n[+]Socket created successfully\n");
+    printf("[+]Socket created successfully\n");
 
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
@@ -40,23 +40,23 @@ int main(int argc, char const *argv[])
 
     if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
     {
-        perror("\n[-]Bind failed");
+        perror("[-]Bind failed\n");
         exit(EXIT_FAILURE);
     }
 
     if (listen(server_fd, 3) < 0)
     {
-        perror("\n[-]listen");
+        perror("[-]listen\n");
         exit(EXIT_FAILURE);
     }
-    printf("\n[+]Waiting for client\n");
+    printf("[+]Waiting for client\n");
     addrlen = sizeof(address);
     if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0)
     {
-        perror("\n[-]Accept client \n");
+        perror("[-]Accept client \n");
         exit(EXIT_FAILURE);
     }
-    printf("\n[+]Accepted client\n");
+    printf("[+]Accepted client\n");
     // read(new_socket, buffer, 1024);
     // numfile = atoi(buffer);
     // printf("%d numfile\n", numfile);
@@ -72,33 +72,42 @@ int main(int argc, char const *argv[])
         int file = open(filename, O_RDONLY);
         if (file < 0)
         {
-            printf("\n[-]No such file \n");
+            printf("[-]No such file \n");
             sprintf(filesize, "%d", -1);
             valread = send(new_socket, filesize, sizeof(filesize), 0);
-            exit(EXIT_FAILURE);
-            // continue;
+            // exit(EXIT_FAILURE);
+            continue;
         }
         if (fstat(file, &filestat) < 0)
         {
-            perror("\n[-]Error getting file stat \n");
+            perror("[-]Error getting file stat \n");
             exit(EXIT_FAILURE);
         }
         sprintf(filesize, "%ld", filestat.st_size);
-        printf("\n[+]File %s found of size %ld \n", filename, filestat.st_size);
+        printf("[+]File %s found of size %ld \n", filename, filestat.st_size);
         valread = send(new_socket, filesize, sizeof(filesize), 0);
         if (valread < 0)
         {
-            perror("\n[-]Sendfile size \n");
+            perror("[-]Sendfile size \n");
             exit(EXIT_FAILURE);
         }
         off_t offset = 0;
         int rem = filestat.st_size;
         int ret;
+        /*
         while (((ret = sendfile(new_socket, file, &offset, 1024)) > 0 && (rem > 0)))
         {
             rem -= ret;
-            // printf("Progress: %.2f\r", 100 * (((double)(filestat.st_size - rem)) / filestat.st_size));
+            printf("Progress: %.2f\r", 100 * (((double)(filestat.st_size - rem)) / filestat.st_size));
         }
+        */
+        while ((valread = read(file, buffer, 1024)) > 0 && rem > 0)
+        {
+            rem -= send(new_socket, buffer, valread, 0);
+            printf("Progress: %.2f\r", 100 * (((double)(filestat.st_size - rem)) / filestat.st_size));
+            bzero(buffer, 1024);
+        }
+        printf("\n");
         bzero(filename, 1024);
     }
     close(new_socket);
